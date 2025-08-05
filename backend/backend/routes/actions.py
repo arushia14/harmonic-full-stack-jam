@@ -1,7 +1,8 @@
-# actions.py
+# backend/routes/actions.py
 
 import uuid
 import time
+import threading
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -13,6 +14,8 @@ from backend.db import database
 
 # task management and pydantic models
 task_store = {}
+task_lock = threading.Lock() # The lock to ensure one task at a time
+
 class TaskStatus(str, Enum):
     PENDING, IN_PROGRESS, SUCCESS, FAILED = "PENDING", "IN_PROGRESS", "SUCCESS", "FAILED"
 class CompanyAssociationIn(BaseModel): company_id: int
@@ -27,10 +30,15 @@ class TaskStatusOut(TaskOut): progress: int = 0; total: int = 0; detail: str = "
 bulk_actions_router = APIRouter(prefix="/actions", tags=["actions"])
 individual_actions_router = APIRouter(tags=["collections"])
 
-# background worker functions
+# --- Rewritten Background Worker Functions with Robust Locking ---
+
 def run_bulk_transfer(task_id: str, source_id: uuid.UUID, dest_id: uuid.UUID):
-    db = database.SessionLocal()
+    if not task_lock.acquire(blocking=False):
+        task_store[task_id].update({"status": TaskStatus.FAILED, "detail": "Another bulk operation is already in progress."})
+        return
+    
     try:
+        db = database.SessionLocal()
         source_company_ids = {c.company_id for c in db.query(database.CompanyCollectionAssociation.company_id).filter(database.CompanyCollectionAssociation.collection_id == source_id).all()}
         dest_company_ids = {c.company_id for c in db.query(database.CompanyCollectionAssociation.company_id).filter(database.CompanyCollectionAssociation.collection_id == dest_id).all()}
         company_ids_to_add = list(source_company_ids - dest_company_ids)
@@ -44,10 +52,15 @@ def run_bulk_transfer(task_id: str, source_id: uuid.UUID, dest_id: uuid.UUID):
         db.rollback(); task_store[task_id].update({"status": TaskStatus.FAILED, "detail": str(e)})
     finally:
         db.close()
+        task_lock.release() # Ensure the lock is always released
 
 def run_selective_transfer(task_id: str, company_ids: List[int], dest_id: uuid.UUID):
-    db = database.SessionLocal()
+    if not task_lock.acquire(blocking=False):
+        task_store[task_id].update({"status": TaskStatus.FAILED, "detail": "Another bulk operation is already in progress."})
+        return
+
     try:
+        db = database.SessionLocal()
         dest_company_ids = {c.company_id for c in db.query(database.CompanyCollectionAssociation.company_id).filter(database.CompanyCollectionAssociation.collection_id == dest_id).all()}
         company_ids_to_add = list(set(company_ids) - dest_company_ids)
         total_to_add = len(company_ids_to_add)
@@ -60,40 +73,46 @@ def run_selective_transfer(task_id: str, company_ids: List[int], dest_id: uuid.U
         db.rollback(); task_store[task_id].update({"status": TaskStatus.FAILED, "detail": str(e)})
     finally:
         db.close()
+        task_lock.release()
 
 def run_bulk_delete(task_id: str, collection_id: uuid.UUID):
-    db = database.SessionLocal()
+    if not task_lock.acquire(blocking=False):
+        task_store[task_id].update({"status": TaskStatus.FAILED, "detail": "Another bulk operation is already in progress."})
+        return
+
     try:
-        associations_to_delete = db.query(database.CompanyCollectionAssociation).filter_by(collection_id=collection_id).all()
-        total_to_delete = len(associations_to_delete)
-        task_store[task_id].update({"status": TaskStatus.IN_PROGRESS, "total": total_to_delete, "detail": "Deleting companies from collection..."})
-        for i, association in enumerate(associations_to_delete):
-            db.delete(association); db.commit(); time.sleep(0.01)
-            task_store[task_id]["progress"] = i + 1
-        task_store[task_id].update({"status": TaskStatus.SUCCESS, "detail": "Bulk delete complete."})
+        db = database.SessionLocal()
+        task_store[task_id].update({"status": TaskStatus.IN_PROGRESS, "detail": "Deleting all companies..."})
+        deleted_count = db.query(database.CompanyCollectionAssociation).filter_by(collection_id=collection_id).delete(synchronize_session=False)
+        db.commit()
+        task_store[task_id].update({"status": TaskStatus.SUCCESS, "progress": deleted_count, "total": deleted_count, "detail": f"Successfully removed {deleted_count} companies."})
     except Exception as e:
         db.rollback(); task_store[task_id].update({"status": TaskStatus.FAILED, "detail": str(e)})
     finally:
         db.close()
+        task_lock.release()
 
 def run_selective_delete(task_id: str, collection_id: uuid.UUID, company_ids: List[int]):
-    db = database.SessionLocal()
+    if not task_lock.acquire(blocking=False):
+        task_store[task_id].update({"status": TaskStatus.FAILED, "detail": "Another bulk operation is already in progress."})
+        return
+
     try:
-        associations_to_delete = db.query(database.CompanyCollectionAssociation).filter(database.CompanyCollectionAssociation.collection_id == collection_id, database.CompanyCollectionAssociation.company_id.in_(company_ids)).all()
-        total_to_delete = len(associations_to_delete)
-        task_store[task_id].update({"status": TaskStatus.IN_PROGRESS, "total": total_to_delete, "detail": "Removing selected companies..."})
-        for i, association in enumerate(associations_to_delete):
-            db.delete(association); db.commit(); time.sleep(0.01)
-            task_store[task_id]["progress"] = i + 1
-        task_store[task_id].update({"status": TaskStatus.SUCCESS, "detail": "Selective remove complete."})
+        db = database.SessionLocal()
+        task_store[task_id].update({"status": TaskStatus.IN_PROGRESS, "detail": "Removing selected companies..."})
+        deleted_count = db.query(database.CompanyCollectionAssociation).filter(database.CompanyCollectionAssociation.collection_id == collection_id, database.CompanyCollectionAssociation.company_id.in_(company_ids)).delete(synchronize_session=False)
+        db.commit()
+        task_store[task_id].update({"status": TaskStatus.SUCCESS, "progress": deleted_count, "total": deleted_count, "detail": f"Successfully removed {deleted_count} companies."})
     except Exception as e:
         db.rollback(); task_store[task_id].update({"status": TaskStatus.FAILED, "detail": str(e)})
     finally:
         db.close()
+        task_lock.release()
 
 # individual action endpoints
 @individual_actions_router.post("/collections/{collection_id}/companies", status_code=201, summary="Add a single company to a collection")
 def add_company_to_collection(collection_id: uuid.UUID, payload: CompanyAssociationIn, db: Session = Depends(database.get_db)):
+    # ... (implementation unchanged)
     company = db.query(database.Company).filter(database.Company.id == payload.company_id).first()
     if not company: raise HTTPException(status_code=404, detail="Company not found")
     collection = db.query(database.CompanyCollection).filter(database.CompanyCollection.id == collection_id).first()
@@ -109,6 +128,7 @@ def add_company_to_collection(collection_id: uuid.UUID, payload: CompanyAssociat
 
 @individual_actions_router.delete("/collections/{collection_id}/companies/{company_id}", status_code=204, summary="Remove a single company from a collection")
 def remove_company_from_collection(collection_id: uuid.UUID, company_id: int, db: Session = Depends(database.get_db)):
+    # ... (implementation unchanged)
     association = db.query(database.CompanyCollectionAssociation).filter_by(collection_id=collection_id, company_id=company_id).first()
     if not association: raise HTTPException(status_code=404, detail="Company not found in this collection")
     db.delete(association)
@@ -117,24 +137,23 @@ def remove_company_from_collection(collection_id: uuid.UUID, company_id: int, db
 
 # bulk action endpoints
 @bulk_actions_router.post("/transfer-collection", response_model=TaskOut, status_code=202)
-def transfer_collection(payload: BulkTransferIn, background_tasks: BackgroundTasks, db: Session = Depends(database.get_db)):
+def transfer_collection(payload: BulkTransferIn, background_tasks: BackgroundTasks):
     task_id = str(uuid.uuid4()); task_store[task_id] = {"status": TaskStatus.PENDING}; background_tasks.add_task(run_bulk_transfer, task_id, payload.source_collection_id, payload.destination_collection_id)
     return {"task_id": task_id, "status": TaskStatus.PENDING}
 
 @bulk_actions_router.post("/transfer-selection", response_model=TaskOut, status_code=202)
-def transfer_selection(payload: SelectiveTransferIn, background_tasks: BackgroundTasks, db: Session = Depends(database.get_db)):
+def transfer_selection(payload: SelectiveTransferIn, background_tasks: BackgroundTasks):
     task_id = str(uuid.uuid4()); task_store[task_id] = {"status": TaskStatus.PENDING}; background_tasks.add_task(run_selective_transfer, task_id, payload.company_ids, payload.destination_collection_id)
     return {"task_id": task_id, "status": TaskStatus.PENDING}
 
 @bulk_actions_router.delete("/collection-contents", response_model=TaskOut, status_code=202)
-def delete_collection_contents(payload: BulkDeleteIn, background_tasks: BackgroundTasks, db: Session = Depends(database.get_db)):
+def delete_collection_contents(payload: BulkDeleteIn, background_tasks: BackgroundTasks):
     task_id = str(uuid.uuid4()); task_store[task_id] = {"status": TaskStatus.PENDING}; background_tasks.add_task(run_bulk_delete, task_id, payload.collection_id)
     return {"task_id": task_id, "status": TaskStatus.PENDING}
 
 @bulk_actions_router.post("/delete-selection", response_model=TaskOut, status_code=202)
-def delete_selection(payload: SelectiveDeleteIn, background_tasks: BackgroundTasks, db: Session = Depends(database.get_db)):
-    task_id = str(uuid.uuid4()); task_store[task_id] = {"status": TaskStatus.PENDING}
-    background_tasks.add_task(run_selective_delete, task_id, payload.collection_id, payload.company_ids)
+def delete_selection(payload: SelectiveDeleteIn, background_tasks: BackgroundTasks):
+    task_id = str(uuid.uuid4()); task_store[task_id] = {"status": TaskStatus.PENDING}; background_tasks.add_task(run_selective_delete, task_id, payload.collection_id, payload.company_ids)
     return {"task_id": task_id, "status": TaskStatus.PENDING}
 
 @bulk_actions_router.get("/tasks/{task_id}/status", response_model=TaskStatusOut)
@@ -142,3 +161,4 @@ def get_task_status(task_id: str):
     task = task_store.get(task_id)
     if not task: raise HTTPException(status_code=404, detail="Task not found")
     return TaskStatusOut(task_id=task_id, status=task.get("status", TaskStatus.FAILED), progress=task.get("progress", 0), total=task.get("total", 0), detail=task.get("detail", "No details available."))
+

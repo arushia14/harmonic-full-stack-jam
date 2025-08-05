@@ -1,4 +1,3 @@
-# main.py
 
 import randomname
 from fastapi import FastAPI

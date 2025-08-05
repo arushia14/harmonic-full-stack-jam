@@ -1,9 +1,10 @@
+// frontend/src/utils/jam-api.ts
 
 import axios from "axios";
 
 const BASE_URL = "http://localhost:8000";
 
-// interfaces
+// --- Interfaces ---
 
 export interface ICompany {
   id: number;
@@ -39,9 +40,9 @@ export interface ITaskStatusOut extends ITaskOut {
   detail: string;
 }
 
-// API service functions
+// --- API Service Functions ---
 
-// read operations
+// --- Read Operations ---
 export async function getCollectionsMetadata(): Promise<ICollectionMetadata[]> {
   try {
     const response = await axios.get(`${BASE_URL}/collections`);
@@ -62,7 +63,7 @@ export async function getCollectionsById(id: string, offset?: number, limit?: nu
   }
 }
 
-// write operations
+// --- Write Operations ---
 
 export async function addCompanyToCollection(collectionId: string, companyId: number): Promise<any> {
   try {
@@ -82,7 +83,7 @@ export async function removeCompanyFromCollection(collectionId: string, companyI
   }
 }
 
-// bulk action triggers
+// --- Bulk Action Triggers ---
 
 export async function startBulkTransfer(sourceCollectionId: string, destinationCollectionId: string): Promise<ITaskOut> {
   try {
@@ -97,7 +98,6 @@ export async function startBulkTransfer(sourceCollectionId: string, destinationC
   }
 }
 
-// initiates task to transfer selected companies
 export async function startSelectiveTransfer(companyIds: number[], destinationCollectionId: string): Promise<ITaskOut> {
   try {
     const response = await axios.post(`${BASE_URL}/actions/transfer-selection`, {
@@ -111,10 +111,8 @@ export async function startSelectiveTransfer(companyIds: number[], destinationCo
   }
 }
 
-// initiates task to delete all companies from collection
 export async function startBulkDelete(collectionId: string): Promise<ITaskOut> {
   try {
-    // axios needs data in data field for DELETE with body
     const response = await axios.delete(`${BASE_URL}/actions/collection-contents`, {
       data: { collection_id: collectionId },
     });
@@ -124,6 +122,20 @@ export async function startBulkDelete(collectionId: string): Promise<ITaskOut> {
     throw error;
   }
 }
+
+export async function startSelectiveDelete(collectionId: string, companyIds: number[]): Promise<ITaskOut> {
+  try {
+    const response = await axios.post(`${BASE_URL}/actions/delete-selection`, {
+      collection_id: collectionId,
+      company_ids: companyIds,
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Error starting selective delete:", error);
+    throw error;
+  }
+}
+
 
 export async function getTaskStatus(taskId: string): Promise<ITaskStatusOut> {
   try {

@@ -1,99 +1,109 @@
+// frontend/src/contexts/TaskContext.tsx
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import axios from 'axios';
 import { 
   getTaskStatus, 
   startBulkTransfer, 
-  startSelectiveTransfer, // new function
-  startBulkDelete,      // new function
+  startSelectiveTransfer, 
+  startBulkDelete, 
+  startSelectiveDelete, 
   ITaskStatusOut 
 } from '../utils/jam-api';
 import toast from 'react-hot-toast';
 
-// context state shape
 interface TaskContextType {
   task: ITaskStatusOut | null;
-  startTransfer: (sourceCollectionId: string, destinationCollectionId: string) => Promise<void>;
-  startSelectionTransfer: (companyIds: number[], destinationCollectionId: string) => Promise<void>; // new action
-  startCollectionDelete: (collectionId: string) => Promise<void>; // new action
+  startTransfer: (source: string, dest: string) => void;
+  startSelectionTransfer: (ids: number[], dest: string) => void;
+  startCollectionDelete: (collectionId: string) => void;
+  startSelectionDelete: (collectionId: string, ids: number[]) => void;
   isProcessing: boolean;
 }
 
 const TaskContext = createContext<TaskContextType | undefined>(undefined);
 
-interface TaskProviderProps {
-  children: ReactNode;
-}
-
-export const TaskProvider: React.FC<TaskProviderProps> = ({ children }) => {
+export const TaskProvider: React.FC<{children: ReactNode}> = ({ children }) => {
   const [task, setTask] = useState<ITaskStatusOut | null>(null);
   const isProcessing = task?.status === 'PENDING' || task?.status === 'IN_PROGRESS';
 
-  const setInitialTask = (initialTaskPromise: Promise<any>, loadingMessage: string) => {
-    toast.loading(loadingMessage, { id: 'taskStart' });
-    initialTaskPromise.then(initialTask => {
-      toast.dismiss('taskStart');
-      setTask({
-        ...initialTask,
-        progress: 0,
-        total: 0,
-        detail: 'Task is pending...',
+  const runTask = useCallback((taskPromise: Promise<ITaskStatusOut>) => {
+    taskPromise
+      .then(initialTask => {
+        setTask({ ...initialTask, progress: 0, total: 0, detail: 'Task is pending...'});
+      })
+      .catch(err => {
+        if (axios.isAxiosError(err) && err.response?.status === 409) {
+          toast.error(err.response.data.detail || 'Another task is already in progress.');
+        } else {
+          console.error('Failed to start task', err);
+          toast.error('Failed to start the task.');
+        }
       });
-    }).catch(error => {
-      console.error('Failed to start task', error);
-      toast.dismiss('taskStart');
-      toast.error('Failed to start the task.');
-    });
-  };
-
-  const startTransfer = useCallback(async (source: string, dest: string) => {
-    setInitialTask(startBulkTransfer(source, dest), 'Starting full transfer...');
   }, []);
 
-  const startSelectionTransfer = useCallback(async (ids: number[], dest: string) => {
-    setInitialTask(startSelectiveTransfer(ids, dest), 'Starting selection transfer...');
-  }, []);
+  const startTransfer = useCallback((s, d) => runTask(startBulkTransfer(s, d)), [runTask]);
+  const startSelectionTransfer = useCallback((i, d) => runTask(startSelectiveTransfer(i, d)), [runTask]);
+  const startCollectionDelete = useCallback((id) => runTask(startBulkDelete(id)), [runTask]);
+  const startSelectionDelete = useCallback((id, i) => runTask(startSelectiveDelete(id, i)), [runTask]);
 
-  const startCollectionDelete = useCallback(async (collectionId: string) => {
-    setInitialTask(startBulkDelete(collectionId), 'Starting bulk delete...');
-  }, []);
+  // --- CORRECTED LOGIC WITH TWO useEffect HOOKS ---
 
+  // Effect 1: Manages the polling interval lifecycle.
   useEffect(() => {
-    if (!task || !isProcessing) return;
+    // If no task is processing, do nothing.
+    if (!isProcessing || !task) {
+      return;
+    }
 
-    const intervalId = setInterval(async () => {
+    // Set up the interval to poll for status updates.
+    const poll = setInterval(async () => {
       try {
         const updatedTask = await getTaskStatus(task.task_id);
         setTask(updatedTask);
-
-        if (updatedTask.status === 'IN_PROGRESS') {
-          const percentage = updatedTask.total > 0 ? Math.round((updatedTask.progress / updatedTask.total) * 100) : 0;
-          toast.loading(`${updatedTask.detail} ${updatedTask.progress} / ${updatedTask.total} (${percentage}%)`, { id: task.task_id });
-        } else if (updatedTask.status === 'SUCCESS') {
-          toast.success(updatedTask.detail, { id: task.task_id, duration: 4000 });
-          clearInterval(intervalId);
-        } else if (updatedTask.status === 'FAILED') {
-          toast.error(`Task failed: ${updatedTask.detail}`, { id: task.task_id });
-          clearInterval(intervalId);
-        }
       } catch (error) {
-        console.error('Failed to get task status', error);
-        toast.error('Could not get task status.', { id: task.task_id });
-        clearInterval(intervalId);
+        console.error('Polling failed', error);
+        // If polling fails, stop the interval and mark the task as failed.
+        clearInterval(poll);
+        setTask(prev => prev ? { ...prev, status: 'FAILED', detail: 'Lost connection to task.' } : null);
       }
-    }, 2000); // poll every 2 seconds
+    }, 2000); // Poll every 2 seconds
 
-    return () => clearInterval(intervalId);
-  }, [task, isProcessing]);
+    // Cleanup function: clear the interval when the task stops processing.
+    return () => clearInterval(poll);
+  }, [isProcessing, task?.task_id]); // This effect only re-runs if a new task starts or the current one finishes.
 
-  const value = { task, startTransfer, startSelectionTransfer, startCollectionDelete, isProcessing };
+  // Effect 2: Manages displaying toast notifications based on the current task state.
+  useEffect(() => {
+    if (!task) return;
+
+    const toastId = task.task_id;
+
+    if (isProcessing) {
+      const percentage = task.total > 0 ? Math.round((task.progress / task.total) * 100) : 0;
+      const message = task.status === 'PENDING' 
+        ? 'Starting task...' 
+        : `${task.detail || 'Processing...'} ${task.progress} / ${task.total} (${percentage}%)`;
+      toast.loading(message, { id: toastId });
+    } else {
+      // When the task is no longer processing, show a final status toast.
+      toast.dismiss(toastId);
+      const finalMessage = `${task.status}: ${task.detail}`;
+      if (task.status === 'SUCCESS') {
+        toast.success(finalMessage, { duration: 4000 });
+      } else if (task.status === 'FAILED') {
+        toast.error(finalMessage, { duration: 6000 });
+      }
+    }
+  }, [task]); // This effect re-runs every time the task object is updated with new progress.
+
+  const value = { task, startTransfer, startSelectionTransfer, startCollectionDelete, startSelectionDelete, isProcessing };
 
   return <TaskContext.Provider value={value}>{children}</TaskContext.Provider>;
 };
 
 export const useTask = (): TaskContextType => {
   const context = useContext(TaskContext);
-  if (context === undefined) {
-    throw new Error('useTask must be used within a TaskProvider');
-  }
+  if (!context) throw new Error('useTask must be used within a TaskProvider');
   return context;
 };
