@@ -1,4 +1,3 @@
-// frontend/src/components/CompanyTable.tsx
 
 import {
   DataGrid,
@@ -17,15 +16,15 @@ import {
 import { Button, CircularProgress, Box } from "@mui/material";
 import { useTask } from "../contexts/TaskContext";
 
-// --- Custom Toolbar for Bulk Actions ---
+// custom toolbar for bulk actions
 interface CustomToolbarProps {
   selectedCompanyIds: number[];
   likedCollectionId: string | undefined;
-  currentCollectionId: string; // Pass in the current collection ID to make it contextual
+  currentCollectionId: string; // pass current collection ID for context
 }
 
 function CustomToolbar(props: CustomToolbarProps) {
-  // Get all necessary functions from the task context
+  // get all task functions
   const { startSelectionTransfer, startSelectionDelete, isProcessing } = useTask();
   const { selectedCompanyIds, likedCollectionId, currentCollectionId } = props;
 
@@ -39,27 +38,27 @@ function CustomToolbar(props: CustomToolbarProps) {
     }
   };
 
-  // New handler for removing selected items from the current list
+  // handle removing selected items from current list
   const handleRemoveSelected = () => {
     if (window.confirm(`Are you sure you want to remove ${selectedCompanyIds.length} companies from this list?`)) {
-      // The selective delete action needs both the collection ID and the company IDs
+      // selective delete needs collection ID and company IDs
       startSelectionDelete(currentCollectionId, selectedCompanyIds);
     }
   };
 
-  // Don't render the toolbar if no items are selected
+  // don't show toolbar if nothing selected
   if (selectedCompanyIds.length === 0) {
     return null;
   }
 
-  // Check if the current view is the "Liked" list
+  // check if we're in the liked list view
   const isLikedListView = currentCollectionId === likedCollectionId;
 
   return (
     <GridToolbarContainer>
       <Box sx={{ flexGrow: 1 }} />
       {isLikedListView ? (
-        // If we are in the Liked list, show a "Remove" button
+        // show remove button for liked list
         <Button
           variant="contained"
           color="secondary"
@@ -70,7 +69,7 @@ function CustomToolbar(props: CustomToolbarProps) {
           Remove {selectedCompanyIds.length} Selected
         </Button>
       ) : (
-        // Otherwise, show the "Move" button
+        // show move button for other lists
         <Button
           variant="contained"
           onClick={handleMoveSelected}
@@ -85,7 +84,6 @@ function CustomToolbar(props: CustomToolbarProps) {
 }
 
 
-// --- Main CompanyTable Component ---
 interface CompanyTableProps {
   selectedCollectionId: string;
   collections: ICollectionMetadata[];
@@ -203,7 +201,7 @@ const CompanyTable = (props: CompanyTableProps) => {
           toolbar: {
             selectedCompanyIds: selectionModel as number[],
             likedCollectionId: likedCompaniesCollectionId,
-            currentCollectionId: props.selectedCollectionId, // Pass current collection ID to toolbar
+            currentCollectionId: props.selectedCollectionId, // pass current collection ID to toolbar
           },
         }}
       />

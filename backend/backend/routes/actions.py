@@ -1,4 +1,4 @@
-# backend/routes/actions.py
+# actions.py
 
 import uuid
 import time
@@ -14,7 +14,7 @@ from backend.db import database
 
 # task management and pydantic models
 task_store = {}
-task_lock = threading.Lock() # The lock to ensure one task at a time
+task_lock = threading.Lock() # lock to ensure one task at a time
 
 class TaskStatus(str, Enum):
     PENDING, IN_PROGRESS, SUCCESS, FAILED = "PENDING", "IN_PROGRESS", "SUCCESS", "FAILED"
@@ -30,7 +30,7 @@ class TaskStatusOut(TaskOut): progress: int = 0; total: int = 0; detail: str = "
 bulk_actions_router = APIRouter(prefix="/actions", tags=["actions"])
 individual_actions_router = APIRouter(tags=["collections"])
 
-# --- Rewritten Background Worker Functions with Robust Locking ---
+# background worker functions with robust locking
 
 def run_bulk_transfer(task_id: str, source_id: uuid.UUID, dest_id: uuid.UUID):
     if not task_lock.acquire(blocking=False):
@@ -52,7 +52,7 @@ def run_bulk_transfer(task_id: str, source_id: uuid.UUID, dest_id: uuid.UUID):
         db.rollback(); task_store[task_id].update({"status": TaskStatus.FAILED, "detail": str(e)})
     finally:
         db.close()
-        task_lock.release() # Ensure the lock is always released
+        task_lock.release() # ensure lock is always released
 
 def run_selective_transfer(task_id: str, company_ids: List[int], dest_id: uuid.UUID):
     if not task_lock.acquire(blocking=False):
@@ -112,7 +112,7 @@ def run_selective_delete(task_id: str, collection_id: uuid.UUID, company_ids: Li
 # individual action endpoints
 @individual_actions_router.post("/collections/{collection_id}/companies", status_code=201, summary="Add a single company to a collection")
 def add_company_to_collection(collection_id: uuid.UUID, payload: CompanyAssociationIn, db: Session = Depends(database.get_db)):
-    # ... (implementation unchanged)
+    # implementation unchanged
     company = db.query(database.Company).filter(database.Company.id == payload.company_id).first()
     if not company: raise HTTPException(status_code=404, detail="Company not found")
     collection = db.query(database.CompanyCollection).filter(database.CompanyCollection.id == collection_id).first()
@@ -128,7 +128,7 @@ def add_company_to_collection(collection_id: uuid.UUID, payload: CompanyAssociat
 
 @individual_actions_router.delete("/collections/{collection_id}/companies/{company_id}", status_code=204, summary="Remove a single company from a collection")
 def remove_company_from_collection(collection_id: uuid.UUID, company_id: int, db: Session = Depends(database.get_db)):
-    # ... (implementation unchanged)
+    # implementation unchanged
     association = db.query(database.CompanyCollectionAssociation).filter_by(collection_id=collection_id, company_id=company_id).first()
     if not association: raise HTTPException(status_code=404, detail="Company not found in this collection")
     db.delete(association)

@@ -1,10 +1,10 @@
-// frontend/src/utils/jam-api.ts
+// jam-api.ts
 
 import axios from "axios";
 
 const BASE_URL = "http://localhost:8000";
 
-// --- Interfaces ---
+// interfaces
 
 export interface ICompany {
   id: number;
@@ -40,9 +40,9 @@ export interface ITaskStatusOut extends ITaskOut {
   detail: string;
 }
 
-// --- API Service Functions ---
+// API service functions
 
-// --- Read Operations ---
+// read operations
 export async function getCollectionsMetadata(): Promise<ICollectionMetadata[]> {
   try {
     const response = await axios.get(`${BASE_URL}/collections`);
@@ -63,7 +63,7 @@ export async function getCollectionsById(id: string, offset?: number, limit?: nu
   }
 }
 
-// --- Write Operations ---
+// write operations
 
 export async function addCompanyToCollection(collectionId: string, companyId: number): Promise<any> {
   try {
@@ -83,7 +83,7 @@ export async function removeCompanyFromCollection(collectionId: string, companyI
   }
 }
 
-// --- Bulk Action Triggers ---
+// bulk action triggers
 
 export async function startBulkTransfer(sourceCollectionId: string, destinationCollectionId: string): Promise<ITaskOut> {
   try {

@@ -1,4 +1,3 @@
-// frontend/src/contexts/TaskContext.tsx
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import axios from 'axios';
@@ -47,33 +46,32 @@ export const TaskProvider: React.FC<{children: ReactNode}> = ({ children }) => {
   const startCollectionDelete = useCallback((id) => runTask(startBulkDelete(id)), [runTask]);
   const startSelectionDelete = useCallback((id, i) => runTask(startSelectiveDelete(id, i)), [runTask]);
 
-  // --- CORRECTED LOGIC WITH TWO useEffect HOOKS ---
 
-  // Effect 1: Manages the polling interval lifecycle.
+  // manage polling interval lifecycle
   useEffect(() => {
-    // If no task is processing, do nothing.
+    // if no task is processing, do nothing
     if (!isProcessing || !task) {
       return;
     }
 
-    // Set up the interval to poll for status updates.
+    // set up interval to poll for status updates
     const poll = setInterval(async () => {
       try {
         const updatedTask = await getTaskStatus(task.task_id);
         setTask(updatedTask);
       } catch (error) {
         console.error('Polling failed', error);
-        // If polling fails, stop the interval and mark the task as failed.
+        // if polling fails, stop interval and mark task as failed
         clearInterval(poll);
         setTask(prev => prev ? { ...prev, status: 'FAILED', detail: 'Lost connection to task.' } : null);
       }
-    }, 2000); // Poll every 2 seconds
+    }, 2000); // poll every 2 seconds
 
-    // Cleanup function: clear the interval when the task stops processing.
+    // cleanup function: clear interval when task stops processing
     return () => clearInterval(poll);
-  }, [isProcessing, task?.task_id]); // This effect only re-runs if a new task starts or the current one finishes.
+  }, [isProcessing, task?.task_id]); // this effect only re-runs if new task starts or current one finishes
 
-  // Effect 2: Manages displaying toast notifications based on the current task state.
+  // manage displaying toast notifications based on current task state
   useEffect(() => {
     if (!task) return;
 
@@ -86,7 +84,7 @@ export const TaskProvider: React.FC<{children: ReactNode}> = ({ children }) => {
         : `${task.detail || 'Processing...'} ${task.progress} / ${task.total} (${percentage}%)`;
       toast.loading(message, { id: toastId });
     } else {
-      // When the task is no longer processing, show a final status toast.
+      // when task is no longer processing, show final status toast
       toast.dismiss(toastId);
       const finalMessage = `${task.status}: ${task.detail}`;
       if (task.status === 'SUCCESS') {
@@ -95,7 +93,7 @@ export const TaskProvider: React.FC<{children: ReactNode}> = ({ children }) => {
         toast.error(finalMessage, { duration: 6000 });
       }
     }
-  }, [task]); // This effect re-runs every time the task object is updated with new progress.
+  }, [task]); // this effect re-runs every time task object is updated with new progress
 
   const value = { task, startTransfer, startSelectionTransfer, startCollectionDelete, startSelectionDelete, isProcessing };
 
