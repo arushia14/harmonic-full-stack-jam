@@ -1,21 +1,21 @@
-// frontend/src/utils/useApi.ts
+// useApi.ts
 
 import { useEffect, useState, useCallback } from "react";
 
-// Define the shape of the return value from the hook
+// hook return value shape
 interface UseApiReturn<T> {
   data: T | null;
   loading: boolean;
   error: string | null;
-  refetch: () => void; // Add a refetch function
+  refetch: () => void; // refetch function
 }
 
 const useApi = <T,>(apiFunction: () => Promise<T>): UseApiReturn<T> => {
   const [data, setData] = useState<T | null>(null);
-  const [loading, setLoading] = useState<boolean>(true); // Start with loading true
+  const [loading, setLoading] = useState<boolean>(true); // start loading
   const [error, setError] = useState<string | null>(null);
 
-  // Memoize the fetchData function so it has a stable identity
+  // memoize fetchData for stable identity
   const fetchData = useCallback(() => {
     setLoading(true);
     setError(null);
@@ -31,12 +31,12 @@ const useApi = <T,>(apiFunction: () => Promise<T>): UseApiReturn<T> => {
       });
   }, [apiFunction]);
 
-  // Initial fetch when the component mounts
+  // initial fetch on mount
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // Return the state and the refetch function
+  // return state and refetch function
   return { data, loading, error, refetch: fetchData };
 };
 

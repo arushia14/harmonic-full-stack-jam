@@ -1,10 +1,9 @@
-// frontend/src/utils/jam-api.ts
 
 import axios from "axios";
 
 const BASE_URL = "http://localhost:8000";
 
-// --- Interfaces ---
+// interfaces
 
 export interface ICompany {
   id: number;
@@ -40,9 +39,9 @@ export interface ITaskStatusOut extends ITaskOut {
   detail: string;
 }
 
-// --- API Service Functions ---
+// API service functions
 
-// --- Read Operations ---
+// read operations
 export async function getCollectionsMetadata(): Promise<ICollectionMetadata[]> {
   try {
     const response = await axios.get(`${BASE_URL}/collections`);
@@ -63,7 +62,7 @@ export async function getCollectionsById(id: string, offset?: number, limit?: nu
   }
 }
 
-// --- Write Operations ---
+// write operations
 
 export async function addCompanyToCollection(collectionId: string, companyId: number): Promise<any> {
   try {
@@ -83,7 +82,7 @@ export async function removeCompanyFromCollection(collectionId: string, companyI
   }
 }
 
-// --- Bulk Action Triggers (New and Existing) ---
+// bulk action triggers
 
 export async function startBulkTransfer(sourceCollectionId: string, destinationCollectionId: string): Promise<ITaskOut> {
   try {
@@ -98,9 +97,7 @@ export async function startBulkTransfer(sourceCollectionId: string, destinationC
   }
 }
 
-/**
- * NEW: Initiates a task to transfer a selection of companies.
- */
+// initiates task to transfer selected companies
 export async function startSelectiveTransfer(companyIds: number[], destinationCollectionId: string): Promise<ITaskOut> {
   try {
     const response = await axios.post(`${BASE_URL}/actions/transfer-selection`, {
@@ -114,12 +111,10 @@ export async function startSelectiveTransfer(companyIds: number[], destinationCo
   }
 }
 
-/**
- * NEW: Initiates a task to delete all companies from a collection.
- */
+// initiates task to delete all companies from collection
 export async function startBulkDelete(collectionId: string): Promise<ITaskOut> {
   try {
-    // For DELETE requests with a body, axios requires the data to be in a `data` field.
+    // axios needs data in data field for DELETE with body
     const response = await axios.delete(`${BASE_URL}/actions/collection-contents`, {
       data: { collection_id: collectionId },
     });

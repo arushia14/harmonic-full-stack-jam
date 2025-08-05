@@ -1,4 +1,4 @@
-# backend/routes/actions.py
+# actions.py
 
 import uuid
 import time
@@ -11,7 +11,7 @@ from typing import List
 
 from backend.db import database
 
-# --- Task Management and Pydantic Models ---
+# task management and pydantic models
 task_store = {}
 class TaskStatus(str, Enum):
     PENDING, IN_PROGRESS, SUCCESS, FAILED = "PENDING", "IN_PROGRESS", "SUCCESS", "FAILED"
@@ -23,12 +23,11 @@ class SelectiveDeleteIn(BaseModel): collection_id: uuid.UUID; company_ids: List[
 class TaskOut(BaseModel): task_id: str; status: TaskStatus
 class TaskStatusOut(TaskOut): progress: int = 0; total: int = 0; detail: str = "Task is processing."
 
-# --- Routers ---
+# routers
 bulk_actions_router = APIRouter(prefix="/actions", tags=["actions"])
 individual_actions_router = APIRouter(tags=["collections"])
 
-# --- Background Worker Functions ---
-# ... (All worker functions like run_bulk_transfer, etc., are unchanged)
+# background worker functions
 def run_bulk_transfer(task_id: str, source_id: uuid.UUID, dest_id: uuid.UUID):
     db = database.SessionLocal()
     try:
@@ -92,7 +91,7 @@ def run_selective_delete(task_id: str, collection_id: uuid.UUID, company_ids: Li
     finally:
         db.close()
 
-# --- FIX: Add the missing Individual Action Endpoints ---
+# individual action endpoints
 @individual_actions_router.post("/collections/{collection_id}/companies", status_code=201, summary="Add a single company to a collection")
 def add_company_to_collection(collection_id: uuid.UUID, payload: CompanyAssociationIn, db: Session = Depends(database.get_db)):
     company = db.query(database.Company).filter(database.Company.id == payload.company_id).first()
@@ -116,8 +115,7 @@ def remove_company_from_collection(collection_id: uuid.UUID, company_id: int, db
     db.commit()
     return None
 
-# --- Bulk Action Endpoints ---
-# ... (These are unchanged)
+# bulk action endpoints
 @bulk_actions_router.post("/transfer-collection", response_model=TaskOut, status_code=202)
 def transfer_collection(payload: BulkTransferIn, background_tasks: BackgroundTasks, db: Session = Depends(database.get_db)):
     task_id = str(uuid.uuid4()); task_store[task_id] = {"status": TaskStatus.PENDING}; background_tasks.add_task(run_bulk_transfer, task_id, payload.source_collection_id, payload.destination_collection_id)

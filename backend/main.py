@@ -1,4 +1,4 @@
-# backend/main.py
+# main.py
 
 import randomname
 from fastapi import FastAPI
@@ -7,13 +7,13 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from starlette.middleware.cors import CORSMiddleware
 
-# --- Import routers ---
+# import routers
 from backend.db import database
 from backend.routes import collections, companies
 from backend.routes.actions import bulk_actions_router, individual_actions_router
 
 
-# --- Lifespan Management ---
+# lifespan management
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     database.Base.metadata.create_all(bind=database.engine)
@@ -25,12 +25,11 @@ async def lifespan(app: FastAPI):
     db.close()
     yield
 
-# --- Application Initialization ---
+# app initialization
 app = FastAPI(lifespan=lifespan)
 
-# --- CORRECTED: Add CORS Middleware FIRST ---
-# The middleware must be added to the app before the routers are included.
-# This ensures that every request is processed by the CORS middleware.
+# add CORS middleware first
+# middleware must be added before routers
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173"],
@@ -39,15 +38,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Include Routers SECOND ---
-# Now that the middleware is in place, we can include our routes.
+# include routers second
 app.include_router(companies.router)
 app.include_router(collections.router)
 app.include_router(bulk_actions_router)
 app.include_router(individual_actions_router)
 
 
-# --- Database Seeding Function ---
+# database seeding function
 def seed_database(db: Session):
     # (The rest of this file is unchanged)
     db.execute(text("TRUNCATE TABLE company_collection_associations CASCADE;"))

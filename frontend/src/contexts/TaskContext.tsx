@@ -1,21 +1,20 @@
-// frontend/src/contexts/TaskContext.tsx
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { 
   getTaskStatus, 
   startBulkTransfer, 
-  startSelectiveTransfer, // Import new function
-  startBulkDelete,      // Import new function
+  startSelectiveTransfer, // new function
+  startBulkDelete,      // new function
   ITaskStatusOut 
 } from '../utils/jam-api';
 import toast from 'react-hot-toast';
 
-// Define the shape of our context state
+// context state shape
 interface TaskContextType {
   task: ITaskStatusOut | null;
   startTransfer: (sourceCollectionId: string, destinationCollectionId: string) => Promise<void>;
-  startSelectionTransfer: (companyIds: number[], destinationCollectionId: string) => Promise<void>; // New action
-  startCollectionDelete: (collectionId: string) => Promise<void>; // New action
+  startSelectionTransfer: (companyIds: number[], destinationCollectionId: string) => Promise<void>; // new action
+  startCollectionDelete: (collectionId: string) => Promise<void>; // new action
   isProcessing: boolean;
 }
 
@@ -81,7 +80,7 @@ export const TaskProvider: React.FC<TaskProviderProps> = ({ children }) => {
         toast.error('Could not get task status.', { id: task.task_id });
         clearInterval(intervalId);
       }
-    }, 2000); // Poll every 2 seconds
+    }, 2000); // poll every 2 seconds
 
     return () => clearInterval(intervalId);
   }, [task, isProcessing]);

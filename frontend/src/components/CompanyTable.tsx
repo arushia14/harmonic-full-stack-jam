@@ -1,4 +1,3 @@
-// frontend/src/components/CompanyTable.tsx
 
 import {
   DataGrid,
@@ -17,7 +16,7 @@ import {
 import { Button, CircularProgress, Box } from "@mui/material";
 import { useTask } from "../contexts/TaskContext";
 
-// --- Custom Toolbar for Bulk Actions ---
+// custom toolbar for bulk actions
 interface CustomToolbarProps {
   selectedCompanyIds: number[];
   likedCollectionId: string | undefined;
@@ -37,20 +36,20 @@ function CustomToolbar(props: CustomToolbarProps) {
     }
   };
 
-  // Only render the toolbar content if there are selected items
+  // only show toolbar if items are selected
   if (selectedCompanyIds.length === 0) {
     return null;
   }
 
   return (
     <GridToolbarContainer>
-      {/* This Box acts as a flexible spacer to push the button to the right */}
+      {/* spacer to push button to the right */}
       <Box sx={{ flexGrow: 1 }} />
       <Button
         variant="contained"
         onClick={handleMoveSelected}
         disabled={isProcessing}
-        sx={{ m: 1 }} // Add some margin for better spacing
+        sx={{ m: 1 }} // margin for spacing
       >
         Move {selectedCompanyIds.length} selected to Liked
       </Button>
@@ -59,7 +58,7 @@ function CustomToolbar(props: CustomToolbarProps) {
 }
 
 
-// --- Main CompanyTable Component ---
+// main component
 interface CompanyTableProps {
   selectedCollectionId: string;
   collections: ICollectionMetadata[];
