@@ -1,3 +1,4 @@
+// frontend/src/components/CompanyTable.tsx
 
 import {
   DataGrid,
@@ -16,15 +17,17 @@ import {
 import { Button, CircularProgress, Box } from "@mui/material";
 import { useTask } from "../contexts/TaskContext";
 
-// custom toolbar for bulk actions
+// --- Custom Toolbar for Bulk Actions ---
 interface CustomToolbarProps {
   selectedCompanyIds: number[];
   likedCollectionId: string | undefined;
+  currentCollectionId: string; // Pass in the current collection ID to make it contextual
 }
 
 function CustomToolbar(props: CustomToolbarProps) {
-  const { startSelectionTransfer, isProcessing } = useTask();
-  const { selectedCompanyIds, likedCollectionId } = props;
+  // Get all necessary functions from the task context
+  const { startSelectionTransfer, startSelectionDelete, isProcessing } = useTask();
+  const { selectedCompanyIds, likedCollectionId, currentCollectionId } = props;
 
   const handleMoveSelected = () => {
     if (!likedCollectionId) {
@@ -36,29 +39,53 @@ function CustomToolbar(props: CustomToolbarProps) {
     }
   };
 
-  // only show toolbar if items are selected
+  // New handler for removing selected items from the current list
+  const handleRemoveSelected = () => {
+    if (window.confirm(`Are you sure you want to remove ${selectedCompanyIds.length} companies from this list?`)) {
+      // The selective delete action needs both the collection ID and the company IDs
+      startSelectionDelete(currentCollectionId, selectedCompanyIds);
+    }
+  };
+
+  // Don't render the toolbar if no items are selected
   if (selectedCompanyIds.length === 0) {
     return null;
   }
 
+  // Check if the current view is the "Liked" list
+  const isLikedListView = currentCollectionId === likedCollectionId;
+
   return (
     <GridToolbarContainer>
-      {/* spacer to push button to the right */}
       <Box sx={{ flexGrow: 1 }} />
-      <Button
-        variant="contained"
-        onClick={handleMoveSelected}
-        disabled={isProcessing}
-        sx={{ m: 1 }} // margin for spacing
-      >
-        Move {selectedCompanyIds.length} selected to Liked
-      </Button>
+      {isLikedListView ? (
+        // If we are in the Liked list, show a "Remove" button
+        <Button
+          variant="contained"
+          color="secondary"
+          onClick={handleRemoveSelected}
+          disabled={isProcessing}
+          sx={{ m: 1 }}
+        >
+          Remove {selectedCompanyIds.length} Selected
+        </Button>
+      ) : (
+        // Otherwise, show the "Move" button
+        <Button
+          variant="contained"
+          onClick={handleMoveSelected}
+          disabled={isProcessing}
+          sx={{ m: 1 }}
+        >
+          Move {selectedCompanyIds.length} to Liked
+        </Button>
+      )}
     </GridToolbarContainer>
   );
 }
 
 
-// main component
+// --- Main CompanyTable Component ---
 interface CompanyTableProps {
   selectedCollectionId: string;
   collections: ICollectionMetadata[];
@@ -170,13 +197,13 @@ const CompanyTable = (props: CompanyTableProps) => {
         onRowSelectionModelChange={(newSelectionModel) => setSelectionModel(newSelectionModel)}
         keepNonExistentRowsSelected
         slots={{
-          //@ts-ignore
           toolbar: CustomToolbar,
         }}
         slotProps={{
           toolbar: {
             selectedCompanyIds: selectionModel as number[],
             likedCollectionId: likedCompaniesCollectionId,
+            currentCollectionId: props.selectedCollectionId, // Pass current collection ID to toolbar
           },
         }}
       />
